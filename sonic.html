@@ -1,13 +1,16 @@
 <!DOCTYPE html>
 <html>
-
 <head>
    <title>Desenvolvendo Jogo com personagem em Javascript</title>
    <script src="animacao.js"></script> 
    <script src="teclado.js"></script> 
    <script src="sonic.js"></script>
    <script src="spritesheet.js"></script> 
-   <script src = "bola.js"></script>
+   <script src="bola.js"></script>
+   
+   <script src="labirinto.js"></script>
+   <script src="inimigo.js"></script>
+   <script src="explosao.js"></script>
 </head>
 
 <body>
@@ -19,22 +22,75 @@
       var teclado = new Teclado(document); 
       var animacao = new Animacao(context); 
 
+      // 1. Instanciamos o Labirinto
+      var labirinto = new Labirinto(context);
+      animacao.novoSprite(labirinto); // O labirinto desenha no fundo
+
+      // 2. Imagem e Personagem
       var imgSonic = new Image(); 
       imgSonic.src = 'imagem/Sonic_Spritesheet.png'; 
 
       var sonic = new Sonic(context, teclado, imgSonic, animacao);
-      sonic.x = 200; 
-      sonic.y = 200; 
+      sonic.x = 60;  // Posição inicial fora da parede
+      sonic.y = 60; 
+      sonic.labirinto = labirinto; // Passa a referência do labirinto
       animacao.novoSprite(sonic);
 
+      // 3. Instanciar alguns Inimigos
+      var inimigo1 = new Inimigo(context, labirinto, 200, 100);
+      var inimigo2 = new Inimigo(context, labirinto, 300, 200);
+      inimigo1.tipo = "inimigo"; // tag para identificar
+      inimigo2.tipo = "inimigo";
+      animacao.novoSprite(inimigo1);
+      animacao.novoSprite(inimigo2);
+
       teclado.disparou(ESPACO, function() {
-    sonic.atirar();
-    });
+         sonic.atirar();
+      });
+
+      // 4. Lógica extra de Colisão (Tiro vs Inimigo e Limpeza de Lixo)
+      // Substituímos proximoFrame() original temporariamente para checar as colisões 
+      // ou podemos fazer um "Game Loop" customizado:
+      var animacaoOriginal = animacao.proximoFrame;
+      animacao.proximoFrame = function() {
+          // Checar se algum tiro pegou em algum inimigo
+          for (var i = 0; i < animacao.sprites.length; i++) {
+              var s1 = animacao.sprites[i];
+              if (s1.tipo === "tiro") {
+                  for (var j = 0; j < animacao.sprites.length; j++) {
+                      var s2 = animacao.sprites[j];
+                      if (s2.tipo === "inimigo" && !s2.excluir) {
+                          // Colisão simples por aproximação (Bounding Box)
+                          if (s1.x >= s2.x && s1.x <= s2.x + s2.largura &&
+                              s1.y >= s2.y && s1.y <= s2.y + s2.altura) {
+                              
+                              // Marcar para remover
+                              s1.excluir = true; 
+                              s2.excluir = true;
+
+                              // Criar a explosão
+                              var explosao = new Explosao(context, s2.x, s2.y);
+                              animacao.novoSprite(explosao);
+                          }
+                      }
+                  }
+              }
+          }
+
+          // Limpar sprites destruídos (inimigos mortos, explosões apagadas, tiros que acertaram)
+          animacao.sprites = animacao.sprites.filter(function(sprite) {
+              if (sprite.excluir || sprite.fim) return false;
+              // Remove o tiro se ele bater na parede
+              if (sprite.tipo === "tiro" && labirinto.colidiu(sprite.x, sprite.y, sprite.raio, sprite.raio)) return false;
+              return true;
+          });
+
+          animacaoOriginal.call(animacao); // Chama o fluxo normal da engine
+      };
 
       imgSonic.onload = function() {
          animacao.ligar();
       }
    </script>
 </body>
-
 </html>
