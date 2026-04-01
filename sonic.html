@@ -1,19 +1,22 @@
 <!DOCTYPE html>
 <html>
 <head>
-   <title>Desenvolvendo Jogo com personagem em Javascript</title>
+   <title>Jogo do Sonic - Aventura no Labirinto</title>
    <script src="animacao.js"></script> 
    <script src="teclado.js"></script> 
    <script src="sonic.js"></script>
    <script src="spritesheet.js"></script> 
    <script src="bola.js"></script>
-   
    <script src="labirinto.js"></script>
-   <script src="inimigo.js"></script>
-   <script src="explosao.js"></script>
+   <script src="vilao.js"></script> <script src="explosao.js"></script>
+   <style>
+       body { background-color: #000; color: white; text-align: center; font-family: Arial;}
+       canvas { border: 2px solid white; box-shadow: 0px 0px 20px blue;}
+   </style>
 </head>
 
 <body>
+   <h1>Sonic Labyrinth Battle</h1>
    <canvas id="canvas_sonic" width="500" height="500"></canvas>
    <script>
       var canvas = document.getElementById('canvas_sonic');
@@ -21,74 +24,143 @@
 
       var teclado = new Teclado(document); 
       var animacao = new Animacao(context); 
-
-      // 1. Instanciamos o Labirinto
       var labirinto = new Labirinto(context);
-      animacao.novoSprite(labirinto); // O labirinto desenha no fundo
 
-      // 2. Imagem e Personagem
+      // Estado do Jogo
+      var faseAtual = 1; 
+      var vitoriasSonic = 0;
+      var vitoriasVilao = 0;
+      var vilaoAtualSprite = null;
+
+      // Lista de Vilões em ordem (Nível 1 a 5)
+      var listaViloes = [
+          { nome: 'Tails', img: 'img/Tails.png' },
+          { nome: 'Amy Rose', img: 'img/Amy Rose.png' },
+          { nome: 'Knuckles', img: 'img/Knuckles.png' },
+          { nome: 'Shadow', img: 'img/Shadow.png' },
+          { nome: 'Dr. Robotnik', img: 'img/Robotnik.png' }
+      ];
+
+      // Carregar Sonic
       var imgSonic = new Image(); 
-      imgSonic.src = 'imagem/Sonic_Spritesheet.png'; 
-
+      imgSonic.src = 'img/Sonic_Spritesheet.png'; 
       var sonic = new Sonic(context, teclado, imgSonic, animacao);
-      sonic.x = 60;  // Posição inicial fora da parede
-      sonic.y = 60; 
-      sonic.labirinto = labirinto; // Passa a referência do labirinto
-      animacao.novoSprite(sonic);
+      sonic.labirinto = labirinto;
+      sonic.tipo = "heroi";
 
-      // 3. Instanciar alguns Inimigos
-      var inimigo1 = new Inimigo(context, labirinto, 200, 100);
-      var inimigo2 = new Inimigo(context, labirinto, 300, 200);
-      inimigo1.tipo = "inimigo"; // tag para identificar
-      inimigo2.tipo = "inimigo";
-      animacao.novoSprite(inimigo1);
-      animacao.novoSprite(inimigo2);
+      // Carregar imagem de fundo genérica (Substitua depois por imagens por fase)
+      var imgFundo = new Image();
+      // imgFundo.src = 'caminho/para/seu/fundo.jpg'; 
+      labirinto.imagemFundo = imgFundo;
+
+      function iniciarRound() {
+          animacao.sprites = []; // Limpa a tela
+          animacao.novoSprite(labirinto);
+          
+          // Configura o labirinto para a fase atual (0 a 4 index)
+          labirinto.nivelAtual = faseAtual - 1;
+
+          // Posição inicial Sonic
+          sonic.x = 55; 
+          sonic.y = 55;
+          animacao.novoSprite(sonic);
+
+          // Carregar e Instanciar Chefe da Fase
+          var imgChefe = new Image();
+          imgChefe.src = listaViloes[faseAtual - 1].img;
+          imgChefe.onload = function() {
+              vilaoAtualSprite = new Vilao(context, imgChefe, animacao, labirinto, sonic, faseAtual);
+              vilaoAtualSprite.x = 400; // Começa do outro lado
+              vilaoAtualSprite.y = 400;
+              animacao.novoSprite(vilaoAtualSprite);
+          }
+      }
 
       teclado.disparou(ESPACO, function() {
-         sonic.atirar();
+         var tiroSonic = sonic.atirar();
       });
 
-      // 4. Lógica extra de Colisão (Tiro vs Inimigo e Limpeza de Lixo)
-      // Substituímos proximoFrame() original temporariamente para checar as colisões 
-      // ou podemos fazer um "Game Loop" customizado:
+      // Sobrescrevendo o proximoFrame para incluir lógica de Jogo e HUD
       var animacaoOriginal = animacao.proximoFrame;
       animacao.proximoFrame = function() {
-          // Checar se algum tiro pegou em algum inimigo
+          // Checar colisões
           for (var i = 0; i < animacao.sprites.length; i++) {
               var s1 = animacao.sprites[i];
+              
+              // Tiro do Sonic acerta o Vilão
               if (s1.tipo === "tiro") {
-                  for (var j = 0; j < animacao.sprites.length; j++) {
-                      var s2 = animacao.sprites[j];
-                      if (s2.tipo === "inimigo" && !s2.excluir) {
-                          // Colisão simples por aproximação (Bounding Box)
-                          if (s1.x >= s2.x && s1.x <= s2.x + s2.largura &&
-                              s1.y >= s2.y && s1.y <= s2.y + s2.altura) {
-                              
-                              // Marcar para remover
-                              s1.excluir = true; 
-                              s2.excluir = true;
-
-                              // Criar a explosão
-                              var explosao = new Explosao(context, s2.x, s2.y);
-                              animacao.novoSprite(explosao);
-                          }
+                  if (vilaoAtualSprite && !vilaoAtualSprite.excluir) {
+                      if (s1.x >= vilaoAtualSprite.x && s1.x <= vilaoAtualSprite.x + vilaoAtualSprite.largura &&
+                          s1.y >= vilaoAtualSprite.y && s1.y <= vilaoAtualSprite.y + vilaoAtualSprite.altura) {
+                          s1.excluir = true; 
+                          vilaoAtualSprite.excluir = true;
+                          animacao.novoSprite(new Explosao(context, vilaoAtualSprite.x, vilaoAtualSprite.y));
+                          vitoriasSonic++;
+                          verificarFimDeRound();
                       }
+                  }
+              }
+
+              // Tiro do Vilão acerta o Sonic
+              if (s1.tipo === "tiro_vilao") {
+                  if (s1.x >= sonic.x && s1.x <= sonic.x + sonic.largura &&
+                      s1.y >= sonic.y && s1.y <= sonic.y + sonic.altura) {
+                      s1.excluir = true;
+                      animacao.novoSprite(new Explosao(context, sonic.x, sonic.y));
+                      vitoriasVilao++;
+                      verificarFimDeRound();
                   }
               }
           }
 
-          // Limpar sprites destruídos (inimigos mortos, explosões apagadas, tiros que acertaram)
+          // Limpar Lixo (Tiros na parede, etc)
           animacao.sprites = animacao.sprites.filter(function(sprite) {
               if (sprite.excluir || sprite.fim) return false;
-              // Remove o tiro se ele bater na parede
-              if (sprite.tipo === "tiro" && labirinto.colidiu(sprite.x, sprite.y, sprite.raio, sprite.raio)) return false;
+              if ((sprite.tipo === "tiro" || sprite.tipo === "tiro_vilao") && labirinto.colidiu(sprite.x, sprite.y, sprite.raio, sprite.raio)) return false;
               return true;
           });
 
-          animacaoOriginal.call(animacao); // Chama o fluxo normal da engine
+          // Desenhar o jogo base
+          animacaoOriginal.call(animacao); 
+
+          // HUD - Placar por cima de tudo
+          context.fillStyle = 'rgba(0,0,0,0.6)';
+          context.fillRect(0, 0, 500, 35);
+          context.fillStyle = 'gold';
+          context.font = 'bold 16px Arial';
+          context.fillText("Fase " + faseAtual + " - " + listaViloes[faseAtual-1].nome, 10, 22);
+          context.fillStyle = 'white';
+          context.fillText("Placar (Melhor de 3): Sonic " + vitoriasSonic + " x " + vitoriasVilao + " Vilão", 200, 22);
       };
 
+      function verificarFimDeRound() {
+          // Pausa rapidamente para mostrar a explosão e reinicia
+          setTimeout(function() {
+              if (vitoriasSonic >= 2) {
+                  alert("Sonic venceu a Fase " + faseAtual + "!");
+                  faseAtual++;
+                  vitoriasSonic = 0;
+                  vitoriasVilao = 0;
+                  if (faseAtual > 5) {
+                      alert("VOCÊ ZEROU O JOGO!");
+                      faseAtual = 1; // Reinicia o jogo
+                  }
+                  iniciarRound();
+              } else if (vitoriasVilao >= 2) {
+                  alert("Game Over! O Vilão venceu a disputa.");
+                  vitoriasSonic = 0;
+                  vitoriasVilao = 0;
+                  iniciarRound(); // Reinicia a fase
+              } else {
+                  // Empate ou próximo round (ninguém chegou a 2)
+                  alert("Round Encerrado! Prepare-se para o próximo!");
+                  iniciarRound();
+              }
+          }, 500); // Meio segundo de delay
+      }
+
       imgSonic.onload = function() {
+         iniciarRound(); // Começa o jogo!
          animacao.ligar();
       }
    </script>

@@ -123,6 +123,8 @@ Sonic.prototype = {
       tiro.tipo = "tiro";
       
       // Bug corrigido (removido o ".bola.js" que estava no final)
-      this.animacao.novoSprite(tiro); 
+      this.animacao.novoSprite(tiro);
+
+      return tiro; 
    }
 }
